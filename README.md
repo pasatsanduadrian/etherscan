@@ -24,3 +24,10 @@ python vesting_analyzer.py
 ```
 În Colab, încărcați fișierele proiectului și rulați aceleași comenzi în celule.
 
+
+## Testare
+
+Pentru a rula testele unitare se foloseste `pytest`. Unele module externe pot incarca automat pluginuri care nu sunt necesare, asa ca recomandam dezactivarea autoload-ului:
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest
+```
