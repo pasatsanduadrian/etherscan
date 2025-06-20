@@ -24,26 +24,38 @@ class VestingContractAnalyzer:
             "infura": "https://polygon-mainnet.infura.io/v3/{pid}",
             "etherscan": "https://api.polygonscan.com/api",
         },
+        "solana": {
+            "infura": "https://api.mainnet-beta.solana.com",
+            "etherscan": "https://api.solscan.io",
+        },
     }
 
     def __init__(self, network: str = "mainnet"):
         """Inițializează analizorul cu configurația API specifică rețelei"""
         self.network = network.lower()
-        self.etherscan_key = os.getenv("ETHERSCAN_API_KEY")
-        project_id = os.getenv("INFURA_PROJECT_ID")
-
-        urls = self.NETWORK_URLS.get(self.network, self.NETWORK_URLS["mainnet"])
-        self.infura_url = urls["infura"].format(pid=project_id)
-        self.etherscan_url = urls["etherscan"]
-        
-        # Inițializează Web3
-        try:
-            self.w3 = Web3(Web3.HTTPProvider(self.infura_url))
-            if not self.w3.is_connected():
-                raise ConnectionError("Nu s-a putut conecta la rețeaua Ethereum")
-        except Exception as e:
-            print(f"Eroare la conectarea Web3: {e}")
+        if self.network == "solana":
+            self.etherscan_key = os.getenv("SOLSCAN_API_KEY")
+            self.infura_url = os.getenv(
+                "SOLANA_RPC_URL", self.NETWORK_URLS["solana"]["infura"]
+            )
+            self.etherscan_url = self.NETWORK_URLS["solana"]["etherscan"]
             self.w3 = None
+        else:
+            self.etherscan_key = os.getenv("ETHERSCAN_API_KEY")
+            project_id = os.getenv("INFURA_PROJECT_ID")
+
+            urls = self.NETWORK_URLS.get(self.network, self.NETWORK_URLS["mainnet"])
+            self.infura_url = urls["infura"].format(pid=project_id)
+            self.etherscan_url = urls["etherscan"]
+
+            # Inițializează Web3
+            try:
+                self.w3 = Web3(Web3.HTTPProvider(self.infura_url))
+                if not self.w3.is_connected():
+                    raise ConnectionError("Nu s-a putut conecta la rețeaua Ethereum")
+            except Exception as e:
+                print(f"Eroare la conectarea Web3: {e}")
+                self.w3 = None
     
     def fetch_contract_abi(self, address: str) -> Optional[Dict]:
         """Obține ABI-ul contractului de pe Etherscan"""
@@ -259,8 +271,11 @@ class VestingContractAnalyzer:
             "error": None,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         try:
+            if self.network == "solana":
+                return self._analyze_solana_account(address, result)
+
             if not self.w3 or not self.w3.is_connected():
                 raise ConnectionError("Nu există conexiune la blockchain")
             
@@ -314,8 +329,36 @@ class VestingContractAnalyzer:
             result["security_score"] = 0
             result["risk_level"] = "ERROR"
             print(f"Eroare la analiza contractului {address}: {e}")
-        
+
         return result
+
+    def _analyze_solana_account(self, address: str, base_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Analizează un cont Solana folosind API-ul Solscan."""
+        url = f"{self.etherscan_url}/account/{address}"
+        headers = {}
+        if self.etherscan_key:
+            headers["token"] = self.etherscan_key
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            data = resp.json().get("data", {})
+            lamports = data.get("lamports", 0)
+            base_result.update({
+                "status": "success",
+                "security_score": 0,
+                "risk_level": "UNKNOWN",
+                "vesting_functions_found": [],
+                "all_functions_count": 0,
+                "is_verified": True,
+                "creation_info": {},
+                "vested_amount": lamports / 1e9,
+                "released_amount": 0.0,
+                "releasable_amount": 0.0,
+                "total_supply": 0.0,
+            })
+        except Exception as e:
+            base_result["error"] = str(e)
+            base_result["risk_level"] = "ERROR"
+        return base_result
     
     def analyze_multiple_contracts(self, contracts_data: List[Dict[str, str]], 
                                   progress_callback=None) -> List[Dict[str, Any]]:
@@ -380,17 +423,18 @@ def real_analyze_contracts(addresses_text: str, names_text: str = "",
     addresses = [addr.strip() for addr in addresses_text.strip().split('\n') if addr.strip()]
     names = [name.strip() for name in names_text.strip().split('\n') if name.strip()] if names_text else []
     
-    # Validează adresele Ethereum
-    invalid_addresses = []
-    for addr in addresses:
-        try:
-            Web3.to_checksum_address(addr)
-        except:
-            invalid_addresses.append(addr)
-    
-    if invalid_addresses:
-        return (f"❌ Adrese invalide: {', '.join(invalid_addresses[:3])}", 
-                None, None, None, None)
+    # Validează adresele doar pentru rețele EVM
+    if network.lower() != "solana":
+        invalid_addresses = []
+        for addr in addresses:
+            try:
+                Web3.to_checksum_address(addr)
+            except Exception:
+                invalid_addresses.append(addr)
+
+        if invalid_addresses:
+            return (f"❌ Adrese invalide: {', '.join(invalid_addresses[:3])}",
+                    None, None, None, None)
     
     # Pregătește datele pentru analiză
     contracts_data = []

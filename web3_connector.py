@@ -16,27 +16,38 @@ class Web3Connector:
         "mainnet": "https://mainnet.infura.io/v3/{project_id}",
         "goerli": "https://goerli.infura.io/v3/{project_id}",
         "polygon": "https://polygon-mainnet.infura.io/v3/{project_id}",
+        # Non-EVM networks can use a direct RPC URL instead of Infura
+        "solana": "https://api.mainnet-beta.solana.com",
     }
 
     ETHERSCAN_APIS = {
         "mainnet": "https://api.etherscan.io/api",
         "goerli": "https://api-goerli.etherscan.io/api",
         "polygon": "https://api.polygonscan.com/api",
+        "solana": "https://api.solscan.io",
     }
 
     def __init__(self, network: str = "mainnet") -> None:
         load_dotenv()
         self.network = network.lower()
-        project_id = os.getenv("INFURA_PROJECT_ID")
-        if not project_id:
-            raise EnvironmentError("INFURA_PROJECT_ID not set")
-        if self.network not in self.INFURA_NETWORKS:
-            raise ValueError(f"Unsupported network: {network}")
 
-        self.infura_url = self.INFURA_NETWORKS[self.network].format(project_id=project_id)
-        self.etherscan_key = os.getenv("ETHERSCAN_API_KEY")
-        self.etherscan_url = self.ETHERSCAN_APIS[self.network]
-        self.w3 = Web3(Web3.HTTPProvider(self.infura_url))
+        if self.network == "solana":
+            # Solana uses RPC directly; API key is optional
+            self.infura_url = os.getenv("SOLANA_RPC_URL", self.INFURA_NETWORKS["solana"])
+            self.etherscan_key = os.getenv("SOLSCAN_API_KEY")
+            self.etherscan_url = self.ETHERSCAN_APIS["solana"]
+            self.w3 = None
+        else:
+            project_id = os.getenv("INFURA_PROJECT_ID")
+            if not project_id:
+                raise EnvironmentError("INFURA_PROJECT_ID not set")
+            if self.network not in self.INFURA_NETWORKS:
+                raise ValueError(f"Unsupported network: {network}")
+
+            self.infura_url = self.INFURA_NETWORKS[self.network].format(project_id=project_id)
+            self.etherscan_key = os.getenv("ETHERSCAN_API_KEY")
+            self.etherscan_url = self.ETHERSCAN_APIS[self.network]
+            self.w3 = Web3(Web3.HTTPProvider(self.infura_url))
 
     # ------------------------------------------------------------------
     def _fetch_abi(self, address: str) -> Optional[List[Dict[str, Any]]]:
@@ -74,9 +85,26 @@ class Web3Connector:
                     return None
             return None
 
+    def _get_solana_vesting_data(self, address: str) -> Dict[str, Any]:
+        """Fetch basic account info from Solana via Solscan API."""
+        url = f"{self.etherscan_url}/account/{address}"
+        headers = {}
+        if self.etherscan_key:
+            headers["token"] = self.etherscan_key
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            data = resp.json().get("data", {})
+            lamports = data.get("lamports", 0)
+            return {"vested": lamports / 1e9, "released": 0.0, "functions": []}
+        except Exception:
+            raise ValueError("Unable to fetch Solana account data")
+
     # ------------------------------------------------------------------
     def get_vesting_data(self, address: str) -> Dict[str, Any]:
         """Retrieve basic vesting information for a contract."""
+        if self.network == "solana":
+            return self._get_solana_vesting_data(address)
+
         abi = self._fetch_abi(address)
         if not abi:
             raise ValueError("Unable to fetch contract ABI")

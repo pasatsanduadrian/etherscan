@@ -7,7 +7,9 @@
 2. Deschideți `.env` și completați valorile pentru:
    - `INFURA_PROJECT_ID`
    - `ETHERSCAN_API_KEY`
-   Pentru obținerea acestor chei este necesară crearea unui cont pe [Infura](https://infura.io/) și pe [Etherscan](https://etherscan.io/).
+   - `SOLANA_RPC_URL` *(opțional, pentru rețeaua Solana)*
+   - `SOLSCAN_API_KEY` *(opțional)*
+   Pentru obținerea cheilor `INFURA_PROJECT_ID` și `ETHERSCAN_API_KEY` este necesară crearea unui cont pe [Infura](https://infura.io/) și pe [Etherscan](https://etherscan.io/). Pentru rețeaua Solana se poate folosi un RPC public sau unul propriu și, dacă este disponibil, un API key Solscan.
 
 ## Instalarea dependențelor
 
