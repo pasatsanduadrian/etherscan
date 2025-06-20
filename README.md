@@ -10,6 +10,7 @@
    - `SOLANA_RPC_URL` *(opțional, pentru rețeaua Solana)*
    - `SOLSCAN_API_KEY` *(opțional)*
    Pentru obținerea cheilor `INFURA_PROJECT_ID` și `ETHERSCAN_API_KEY` este necesară crearea unui cont pe [Infura](https://infura.io/) și pe [Etherscan](https://etherscan.io/). Pentru rețeaua Solana se poate folosi un RPC public sau unul propriu și, dacă este disponibil, un API key Solscan.
+   Pentru rețele suplimentare, adăugați variabilele corespunzătoare (ex. `BSC_RPC_URL` și `BSCSCAN_API_KEY`) și introduceți noile valori în dicționarele `INFURA_NETWORKS`/`ETHERSCAN_APIS` și `NETWORK_URLS`.
 
 ## Instalarea dependențelor
 
