@@ -16,6 +16,11 @@ Rulați următoarea comandă pentru a instala pachetele necesare:
 pip install -r requirements.txt
 ```
 
+**Notă pentru Google Colab:** mediul Colab include deja anumite pachete cu
+versiuni blocate, în special `pandas` și `requests`. Pentru a evita mesaje de
+conflict la instalare este recomandat să păstrați versiunile existente în Colab
+prin rularea comenzii de mai sus fără opțiunea `--upgrade`.
+
 ## Rulare
 
 Aplicația poate fi utilizată local sau în Google Colab. Pentru rularea locală executați:

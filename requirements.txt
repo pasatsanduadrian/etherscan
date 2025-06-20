@@ -1,8 +1,8 @@
 web3>=6.10
-requests>=2.32.4
+requests==2.32.3
 python-dotenv>=1.1.0
 gradio>=5.34.2
 plotly>=6.1.2
-pandas>=2.3.0
+pandas==2.2.2
 
 pytest==7.4.4
