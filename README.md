@@ -7,7 +7,16 @@
 2. Deschideți `.env` și completați valorile pentru:
    - `INFURA_PROJECT_ID`
    - `ETHERSCAN_API_KEY`
+   - `SOLSCAN_API_KEY` (opțional, pentru integrarea Solana)
    Pentru obținerea acestor chei este necesară crearea unui cont pe [Infura](https://infura.io/) și pe [Etherscan](https://etherscan.io/).
+
+### Chei API suplimentare
+
+Pentru a adăuga suport pentru alte rețele care necesită chei dedicate,
+introduceți variabilele corespunzătoare în fișierul `.env`.
+De exemplu, pentru Solscan se folosește `SOLSCAN_API_KEY`.
+Noile chei sunt expuse automat în modulele `web3_connector.py` și
+`web3-integration.py`.
 
 ## Instalarea dependențelor
 

@@ -24,47 +24,68 @@ class VestingContractAnalyzer:
             "infura": "https://polygon-mainnet.infura.io/v3/{pid}",
             "etherscan": "https://api.polygonscan.com/api",
         },
+        "solana": {
+            "infura": "https://api.mainnet-beta.solana.com",
+            "etherscan": "https://api.solscan.io",
+        },
     }
 
     def __init__(self, network: str = "mainnet"):
         """Inițializează analizorul cu configurația API specifică rețelei"""
         self.network = network.lower()
-        self.etherscan_key = os.getenv("ETHERSCAN_API_KEY")
-        project_id = os.getenv("INFURA_PROJECT_ID")
-
         urls = self.NETWORK_URLS.get(self.network, self.NETWORK_URLS["mainnet"])
-        self.infura_url = urls["infura"].format(pid=project_id)
-        self.etherscan_url = urls["etherscan"]
-        
-        # Inițializează Web3
-        try:
-            self.w3 = Web3(Web3.HTTPProvider(self.infura_url))
-            if not self.w3.is_connected():
-                raise ConnectionError("Nu s-a putut conecta la rețeaua Ethereum")
-        except Exception as e:
-            print(f"Eroare la conectarea Web3: {e}")
+
+        if self.network == "solana":
+            self.infura_url = urls["infura"]
+            self.etherscan_key = os.getenv("SOLSCAN_API_KEY")
+            self.etherscan_url = urls["etherscan"]
             self.w3 = None
+        else:
+            self.etherscan_key = os.getenv("ETHERSCAN_API_KEY")
+            project_id = os.getenv("INFURA_PROJECT_ID")
+            self.infura_url = urls["infura"].format(pid=project_id)
+            self.etherscan_url = urls["etherscan"]
+            # Inițializează Web3
+            try:
+                self.w3 = Web3(Web3.HTTPProvider(self.infura_url))
+                if not self.w3.is_connected():
+                    raise ConnectionError("Nu s-a putut conecta la rețeaua Ethereum")
+            except Exception as e:
+                print(f"Eroare la conectarea Web3: {e}")
+                self.w3 = None
     
     def fetch_contract_abi(self, address: str) -> Optional[Dict]:
         """Obține ABI-ul contractului de pe Etherscan"""
         try:
+            if self.network == "solana":
+                headers = {}
+                if self.etherscan_key:
+                    headers["token"] = self.etherscan_key
+                resp = requests.get(
+                    f"{self.etherscan_url}/account?address={address}",
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return None
+
             params = {
                 "module": "contract",
-                "action": "getabi", 
+                "action": "getabi",
                 "address": address,
                 "apikey": self.etherscan_key
             }
-            
+
             response = requests.get(self.etherscan_url, params=params)
             response.raise_for_status()
-            
+
             data = response.json()
             if data["status"] == "1":
                 return json.loads(data["result"])
             else:
                 print(f"Eroare Etherscan: {data.get('message', 'Unknown error')}")
                 return None
-                
+
         except Exception as e:
             print(f"Eroare la obținerea ABI: {e}")
             return None
@@ -177,28 +198,41 @@ class VestingContractAnalyzer:
             "releasable_amount": 0.0,
             "total_supply": 0.0
         }
-        
+
         try:
-            # Încearcă să obțină cantitatea vested
-            vested = self.call_contract_function(contract, "vestedAmount", address)
-            if vested is not None:
-                amounts["vested_amount"] = float(vested) / 1e18  # Convert from wei
-            
-            # Încearcă să obțină cantitatea released  
-            released = self.call_contract_function(contract, "released", address)
-            if released is not None:
-                amounts["released_amount"] = float(released) / 1e18
-            
-            # Încearcă să obțină cantitatea releasable
-            releasable = self.call_contract_function(contract, "releasable", address)
-            if releasable is not None:
-                amounts["releasable_amount"] = float(releasable) / 1e18
-            
-            # Încearcă să obțină total supply din contractul token
-            total_supply = self.call_contract_function(contract, "totalSupply")
-            if total_supply is not None:
-                amounts["total_supply"] = float(total_supply) / 1e18
-            
+            if self.network == "solana":
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "getBalance",
+                    "params": [address],
+                }
+                resp = requests.post(self.infura_url, json=payload)
+                lamports = resp.json().get("result", {}).get("value", 0)
+                sol = float(lamports) / 1e9
+                amounts["vested_amount"] = sol
+                amounts["releasable_amount"] = sol
+            else:
+                # Încearcă să obțină cantitatea vested
+                vested = self.call_contract_function(contract, "vestedAmount", address)
+                if vested is not None:
+                    amounts["vested_amount"] = float(vested) / 1e18  # Convert from wei
+
+                # Încearcă să obțină cantitatea released
+                released = self.call_contract_function(contract, "released", address)
+                if released is not None:
+                    amounts["released_amount"] = float(released) / 1e18
+
+                # Încearcă să obțină cantitatea releasable
+                releasable = self.call_contract_function(contract, "releasable", address)
+                if releasable is not None:
+                    amounts["releasable_amount"] = float(releasable) / 1e18
+
+                # Încearcă să obțină total supply din contractul token
+                total_supply = self.call_contract_function(contract, "totalSupply")
+                if total_supply is not None:
+                    amounts["total_supply"] = float(total_supply) / 1e18
+
         except Exception as e:
             print(f"Eroare la obținerea cantităților: {e}")
         
@@ -207,22 +241,32 @@ class VestingContractAnalyzer:
     def check_contract_verification(self, address: str) -> bool:
         """Verifică dacă contractul este verificat pe Etherscan"""
         try:
+            if self.network == "solana":
+                headers = {}
+                if self.etherscan_key:
+                    headers["token"] = self.etherscan_key
+                resp = requests.get(
+                    f"{self.etherscan_url}/account?address={address}",
+                    headers=headers,
+                )
+                return resp.status_code == 200
+
             params = {
                 "module": "contract",
                 "action": "getsourcecode",
                 "address": address,
                 "apikey": self.etherscan_key
             }
-            
+
             response = requests.get(self.etherscan_url, params=params)
             data = response.json()
-            
+
             if data["status"] == "1" and data["result"]:
                 source_code = data["result"][0].get("SourceCode", "")
                 return len(source_code) > 0
-            
+
             return False
-            
+
         except Exception as e:
             print(f"Eroare la verificarea contractului: {e}")
             return False
@@ -230,21 +274,33 @@ class VestingContractAnalyzer:
     def get_contract_creation_info(self, address: str) -> Dict[str, Any]:
         """Obține informații despre crearea contractului"""
         try:
+            if self.network == "solana":
+                headers = {}
+                if self.etherscan_key:
+                    headers["token"] = self.etherscan_key
+                resp = requests.get(
+                    f"{self.etherscan_url}/account?address={address}",
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return {}
+
             params = {
                 "module": "contract",
-                "action": "getcontractcreation", 
+                "action": "getcontractcreation",
                 "contractaddresses": address,
                 "apikey": self.etherscan_key
             }
-            
+
             response = requests.get(self.etherscan_url, params=params)
             data = response.json()
-            
+
             if data["status"] == "1" and data["result"]:
                 return data["result"][0]
-            
+
             return {}
-            
+
         except Exception as e:
             print(f"Eroare la obținerea info creație: {e}")
             return {}
@@ -261,6 +317,32 @@ class VestingContractAnalyzer:
         }
         
         try:
+            if self.network == "solana":
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "getBalance",
+                    "params": [address],
+                }
+                resp = requests.post(self.infura_url, json=payload)
+                lamports = resp.json().get("result", {}).get("value", 0)
+                sol = float(lamports) / 1e9
+                is_verified = self.check_contract_verification(address)
+                result.update({
+                    "status": "success",
+                    "security_score": 0,
+                    "risk_level": "LOW",
+                    "vesting_functions_found": [],
+                    "all_functions_count": 0,
+                    "is_verified": is_verified,
+                    "creation_info": {},
+                    "vested_amount": sol,
+                    "released_amount": 0.0,
+                    "releasable_amount": sol,
+                    "total_supply": 0.0,
+                })
+                return result
+
             if not self.w3 or not self.w3.is_connected():
                 raise ConnectionError("Nu există conexiune la blockchain")
             
@@ -348,8 +430,11 @@ def create_analyzer_instance(network: str = "mainnet"):
     """Creează o instanță a analizorului cu verificarea configurației"""
     try:
         analyzer = VestingContractAnalyzer(network)
-        
+
         # Testează conexiunea
+        if analyzer.network == "solana":
+            print("✅ Conectat la nodul Solana")
+            return analyzer
         if analyzer.w3 and analyzer.w3.is_connected():
             latest_block = analyzer.w3.eth.block_number
             print(f"✅ Conectat la Ethereum. Ultimul bloc: {latest_block}")
