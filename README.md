@@ -29,6 +29,17 @@ python vesting_analyzer.py
 ```
 În Colab, încărcați fișierele proiectului și rulați aceleași comenzi în celule.
 
+### Verificarea unui singur contract
+
+Pentru a analiza rapid un contract individual puteți folosi scriptul `check_contract.py`:
+
+```bash
+python check_contract.py 0xCONTRACT_ADDRESS \
+    --beneficiary 0xBENEFICIAR_ADDRESS --network mainnet
+```
+
+Parametrul `--beneficiary` este opțional, iar `--network` poate fi `mainnet`, `goerli` sau `polygon`.
+
 
 ## Testare
 
