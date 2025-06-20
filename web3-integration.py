@@ -10,12 +10,31 @@ import asyncio
 
 class VestingContractAnalyzer:
     """Analizor complet pentru contractele de vesting Ethereum"""
-    
-    def __init__(self):
-        """Inițializează analizorul cu configurația API"""
-        self.infura_url = f"https://mainnet.infura.io/v3/{os.getenv('INFURA_PROJECT_ID')}"
-        self.etherscan_key = os.getenv("ETHERSCAN_API_KEY") 
-        self.etherscan_url = "https://api.etherscan.io/api"
+
+    NETWORK_URLS = {
+        "mainnet": {
+            "infura": "https://mainnet.infura.io/v3/{pid}",
+            "etherscan": "https://api.etherscan.io/api",
+        },
+        "goerli": {
+            "infura": "https://goerli.infura.io/v3/{pid}",
+            "etherscan": "https://api-goerli.etherscan.io/api",
+        },
+        "polygon": {
+            "infura": "https://polygon-mainnet.infura.io/v3/{pid}",
+            "etherscan": "https://api.polygonscan.com/api",
+        },
+    }
+
+    def __init__(self, network: str = "mainnet"):
+        """Inițializează analizorul cu configurația API specifică rețelei"""
+        self.network = network.lower()
+        self.etherscan_key = os.getenv("ETHERSCAN_API_KEY")
+        project_id = os.getenv("INFURA_PROJECT_ID")
+
+        urls = self.NETWORK_URLS.get(self.network, self.NETWORK_URLS["mainnet"])
+        self.infura_url = urls["infura"].format(pid=project_id)
+        self.etherscan_url = urls["etherscan"]
         
         # Inițializează Web3
         try:
@@ -325,10 +344,10 @@ class VestingContractAnalyzer:
 
 # ── INTEGRARE CU GRADIO ──────────────────────────────────────────────────────────
 
-def create_analyzer_instance():
+def create_analyzer_instance(network: str = "mainnet"):
     """Creează o instanță a analizorului cu verificarea configurației"""
     try:
-        analyzer = VestingContractAnalyzer()
+        analyzer = VestingContractAnalyzer(network)
         
         # Testează conexiunea
         if analyzer.w3 and analyzer.w3.is_connected():
@@ -343,12 +362,12 @@ def create_analyzer_instance():
         print(f"❌ Eroare la inițializarea analizorului: {e}")
         return None
 
-def real_analyze_contracts(addresses_text: str, names_text: str = "", 
+def real_analyze_contracts(addresses_text: str, names_text: str = "",
                           network: str = "Mainnet", progress=None) -> tuple:
     """Funcție de analiză reală pentru integrarea cu Gradio"""
     
     # Creează analizorul
-    analyzer = create_analyzer_instance()
+    analyzer = create_analyzer_instance(network.lower())
     if not analyzer:
         return ("❌ Nu s-a putut inițializa analizorul. Verifică cheile API.", 
                 None, None, None, None)
